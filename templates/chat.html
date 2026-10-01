@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DST 聊天室</title>
+    <style>
+        :root {
+            --bg-color: #f5f7fa;
+            --surface: #ffffff;
+            --text-main: #333333;
+            --text-muted: #666666;
+            --border: #e4e7eb;
+            --primary: #4CAF50;
+            --primary-hover: #45a049;
+            --danger: #f44336;
+        }
+        body {
+            background-color: var(--bg-color); color: var(--text-main); font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0; display: flex; height: 100vh; flex-direction: column;
+        }
+        header { background-color: var(--surface); padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); box-shadow: 0 1px 3px rgba(0,0,0,0.05); z-index: 10; }
+        header h1 { margin: 0; color: var(--primary); font-size: 20px; display: flex; align-items: center; gap: 10px; }
+        .logout { color: var(--danger); text-decoration: none; font-size: 14px; font-weight: 500; }
+        
+        .main { display: flex; flex: 1; overflow: hidden; position: relative; }
+        
+        .sidebar { 
+            width: 250px; background-color: var(--surface); border-right: 1px solid var(--border); 
+            padding: 15px; overflow-y: auto; display: flex; flex-direction: column; transition: transform 0.3s ease;
+        }
+        .sidebar h3 { margin-top: 0; color: var(--primary); font-size: 16px; border-bottom: 1px solid var(--border); padding-bottom: 10px; }
+        .player-item { padding: 10px 0; border-bottom: 1px solid var(--bg-color); font-size: 14px; display: flex; flex-direction: column; gap: 4px; }
+        .player-prefab { color: #555; font-size: 12px; background: #eee; padding: 2px 6px; border-radius: 4px; align-self: flex-start; }
+        .player-name { font-weight: 500; }
+        
+        .chat-area { flex: 1; display: flex; flex-direction: column; background-color: var(--bg-color); min-width: 0; }
+        .messages { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
+        .message { background-color: var(--surface); padding: 12px 16px; border-radius: 8px; max-width: 85%; align-self: flex-start; box-shadow: 0 1px 2px rgba(0,0,0,0.05); border: 1px solid var(--border); }
+        .message .meta { font-size: 12px; color: var(--text-muted); margin-bottom: 6px; display: flex; justify-content: space-between; gap: 10px; }
+        .message .sender { color: var(--primary); font-weight: bold; }
+        .message .content { line-height: 1.4; word-break: break-word; }
+        
+        .input-area { padding: 15px; background-color: var(--surface); border-top: 1px solid var(--border); display: flex; gap: 10px; box-shadow: 0 -1px 3px rgba(0,0,0,0.02); align-items: center; }
+        
+        .current-user { color: var(--primary); font-weight: bold; padding: 12px 10px 12px 0; font-size: 15px; white-space: nowrap; }
+        
+        input[type="text"] {
+            padding: 12px; background-color: var(--bg-color); color: var(--text-main); border: 1px solid var(--border); border-radius: 6px; outline: none; font-size: 14px; flex: 1; min-width: 0;
+        }
+        input[type="text"]:focus { border-color: var(--primary); }
+        button { padding: 12px 24px; background-color: var(--primary); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 14px; white-space: nowrap; transition: background 0.2s; }
+        button:hover { background-color: var(--primary-hover); }
+        button:disabled { background-color: #9e9e9e; cursor: not-allowed; }
+        
+        .menu-btn { display: none; background: none; border: none; color: var(--primary); font-size: 24px; cursor: pointer; padding: 0; margin-right: 10px; line-height: 1; }
+        .overlay { display: none; position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 15; }
+
+        @media (max-width: 768px) {
+            .menu-btn { display: block; }
+            .sidebar { 
+                position: absolute; left: 0; top: 0; bottom: 0; z-index: 20; 
+                transform: translateX(-100%); width: 240px; box-shadow: 2px 0 5px rgba(0,0,0,0.1);
+            }
+            .sidebar.open { transform: translateX(0); }
+            .overlay.open { display: block; }
+            .input-area { flex-wrap: wrap; }
+            .current-user { display: none; }
+            input[type="text"] { width: 100%; flex: auto; }
+            button { width: 100%; }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>
+            <button class="menu-btn" id="menu-btn">☰</button>
+            {{ username }}
+        </h1>
+        <a href="/logout" class="logout">退出登录</a>
+    </header>
+    <div class="main">
+        <div class="overlay" id="overlay"></div>
+        <div class="sidebar" id="sidebar">
+            <h3>在线角色</h3>
+            <div id="player-list">加载中...</div>
+        </div>
+        <div class="chat-area">
+            <div class="messages" id="messages"></div>
+            <form class="input-area" id="chat-form">
+                <div class="current-user">{{ username }}</div>
+                <input type="text" id="msg-input" placeholder="输入消息..." autocomplete="off" required>
+                <button type="submit" id="send-btn">发送</button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        const PREFAB_MAP = {
+            'wilson': 'Wilson', 'willow': 'Willow', 'wendy': 'Wendy', 'wx-78': 'WX-78',
+            'wickerbottom': 'Wickerbottom', 'woodie': 'Woodie', 'wes': 'Wes', 'waxwell': 'Maxwell',
+            'webber': 'Webber', 'wathgrithr': 'Wigfrid', 'winona': 'Winona', 'wortox': 'Wortox',
+            'wormwood': 'Wormwood', 'warly': 'Warly', 'wurt': 'Wurt', 'walter': 'Walter', 'wanda': 'Wanda'
+        };
+
+        const sidebar = document.getElementById('sidebar');
+        const overlay = document.getElementById('overlay');
+        const menuBtn = document.getElementById('menu-btn');
+
+        menuBtn.addEventListener('click', () => {
+            sidebar.classList.add('open');
+            overlay.classList.add('open');
+        });
+
+        overlay.addEventListener('click', () => {
+            sidebar.classList.remove('open');
+            overlay.classList.remove('open');
+        });
+
+        function getDisplayName(prefab) {
+            return PREFAB_MAP[prefab] || prefab;
+        }
+
+        async function fetchPlayers() {
+            try {
+                const res = await fetch('/api/players');
+                if (res.status === 401) { window.location.href = '/login'; return; }
+                const players = await res.json();
+                
+                const list = document.getElementById('player-list');
+                
+                if (players.length === 0) {
+                    list.innerHTML = '<div style="color:var(--text-muted);font-size:14px;text-align:center;margin-top:20px;">当前无玩家</div>';
+                } else {
+                    list.innerHTML = players.map(p => `
+                        <div class="player-item">
+                            <span class="player-name">${p.name}</span>
+                            <span class="player-prefab">[${getDisplayName(p.prefab)}]</span>
+                        </div>
+                    `).join('');
+                }
+            } catch (e) {
+                console.error("Fetch players error", e);
+            }
+        }
+
+        async function fetchMessages() {
+            try {
+                const res = await fetch('/api/messages');
+                if (res.status === 401) { window.location.href = '/login'; return; }
+                const messages = await res.json();
+                
+                const box = document.getElementById('messages');
+                const isScrolledToBottom = box.scrollHeight - box.clientHeight <= box.scrollTop + 1;
+                
+                box.innerHTML = messages.map(m => `
+                    <div class="message">
+                        <div class="meta"><span class="sender">${m.sender}</span> <span>${m.timestamp}</span></div>
+                        <div class="content">${m.content}</div>
+                    </div>
+                `).join('');
+                
+                if (isScrolledToBottom) {
+                    box.scrollTop = box.scrollHeight;
+                }
+            } catch (e) {
+                console.error("Fetch messages error", e);
+            }
+        }
+
+        document.getElementById('chat-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const btn = document.getElementById('send-btn');
+            const input = document.getElementById('msg-input');
+            const content = input.value;
+            
+            btn.disabled = true;
+            try {
+                const res = await fetch('/api/messages', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ content })
+                });
+                if (res.status === 401) {
+                    window.location.href = '/login';
+                    return;
+                }
+                if (res.ok) {
+                    input.value = '';
+                    fetchMessages();
+                } else {
+                    alert('发送失败');
+                }
+            } finally {
+                setTimeout(() => { btn.disabled = false; }, 2000);
+            }
+        });
+
+        // Init
+        fetchPlayers();
+        fetchMessages();
+        setInterval(fetchPlayers, 5000);
+        setInterval(fetchMessages, 3000);
+    </script>
+</body>
+</html>

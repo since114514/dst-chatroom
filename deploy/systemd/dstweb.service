@@ -1,0 +1,14 @@
+[Unit]
+Description=DST Web Chatroom
+After=network.target
+
+[Service]
+User=root
+WorkingDirectory=/opt/dst-chatroom
+ExecStart=/usr/bin/python3 /opt/dst-chatroom/app.py
+Restart=always
+RestartSec=3
+Environment="PATH=/usr/bin:/usr/local/bin"
+
+[Install]
+WantedBy=multi-user.target

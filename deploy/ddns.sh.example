@@ -1,0 +1,61 @@
+#!/bin/bash
+# Cloudflare DDNS 示例：服务器开机后把多条 A 记录更新为当前公网 IP，
+# 并按记录各自保持「代理/直连」状态。配合 crontab @reboot 使用。
+#
+# 用法：
+#   1. 在 Cloudflare 创建 API Token（Zone.DNS Edit 权限），填入 API_TOKEN
+#   2. 填入 ZONE_ID 与各 A 记录的 RECORD_ID（记录详情页可查）
+#   3. RECORDS 每行格式：RECORD_ID|RECORD_NAME|PROXIED（true=小黄云代理 / false=仅DNS直连）
+#   4. crontab -e 添加：@reboot /path/to/ddns.sh > /dev/null 2>&1
+
+# Cloudflare API variables
+API_TOKEN="YOUR_CF_API_TOKEN"
+ZONE_ID="YOUR_ZONE_ID"
+
+# 记录列表（RECORD_ID|RECORD_NAME|PROXIED）：
+#   dst  走 Cloudflare 代理（仅网页聊天室 80/443）
+#   game 灰云直连（饥荒游戏 UDP 端口用）
+RECORDS=(
+    "RECORD_ID_DST|dst.example.com|true"
+    "RECORD_ID_GAME|game.example.com|false"
+)
+
+# Get current public IP
+IP=$(curl -s https://ipv4.icanhazip.com)
+
+if [ -z "$IP" ]; then
+    echo "Failed to get public IP."
+    exit 1
+fi
+
+for entry in "${RECORDS[@]}"; do
+    RECORD_ID="${entry%%|*}"
+    REST="${entry#*|}"
+    RECORD_NAME="${REST%%|*}"
+    PROXIED="${REST##*|}"
+
+    # Get currently registered IP
+    CURRENT_IP=$(curl -s -X GET "https://api.cloudflare.com/client/v4/zones/${ZONE_ID}/dns_records/${RECORD_ID}" \
+         -H "Authorization: Bearer ${API_TOKEN}" \
+         -H "Content-Type: application/json" | grep -o '"content":"[^"]*' | cut -d'"' -f4)
+
+    if [ "$IP" == "$CURRENT_IP" ]; then
+        echo "${RECORD_NAME}: IP has not changed (${IP})."
+        continue
+    fi
+
+    echo "${RECORD_NAME}: IP changed from ${CURRENT_IP} to ${IP}. Updating Cloudflare..."
+
+    # Update DNS record
+    RESPONSE=$(curl -s -X PUT "https://api.cloudflare.com/client/v4/zones/${ZONE_ID}/dns_records/${RECORD_ID}" \
+         -H "Authorization: Bearer ${API_TOKEN}" \
+         -H "Content-Type: application/json" \
+         --data '{"type":"A","name":"'${RECORD_NAME}'","content":"'${IP}'","ttl":1,"proxied":'${PROXIED}'}')
+
+    if echo "$RESPONSE" | grep -q '"success":true'; then
+        echo "${RECORD_NAME}: DDNS Update successful."
+    else
+        echo "${RECORD_NAME}: DDNS Update failed: $RESPONSE"
+        exit 1
+    fi
+done

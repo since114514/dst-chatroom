@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DST 聊天室登录</title>
+    <style>
+        :root {
+            --bg-color: #f5f7fa;
+            --surface: #ffffff;
+            --text-main: #333333;
+            --border: #e4e7eb;
+            --primary: #4CAF50;
+        }
+        body {
+            background-color: var(--bg-color); color: var(--text-main); font-family: 'Segoe UI', sans-serif;
+            display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0;
+            padding: 0 20px;
+        }
+        .login-box {
+            background-color: var(--surface); padding: 40px 30px; border-radius: 10px; box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+            text-align: center; width: 100%; max-width: 350px; border: 1px solid var(--border); box-sizing: border-box;
+        }
+        h2 { margin-top: 0; color: var(--primary); margin-bottom: 30px; font-size: 24px; }
+        input {
+            width: 100%; padding: 12px; margin-bottom: 20px; border-radius: 6px; border: 1px solid var(--border);
+            box-sizing: border-box; background-color: var(--bg-color); color: var(--text-main); outline: none; font-size: 16px;
+        }
+        input:focus { border-color: var(--primary); }
+        button {
+            width: 100%; padding: 12px; background-color: var(--primary); color: white; border: none;
+            border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 16px; transition: background 0.2s;
+        }
+        button:hover { background-color: #45a049; }
+        .error { color: #f44336; margin-bottom: 15px; font-size: 14px; }
+        .tips { margin-top: 15px; font-size: 12px; color: #888; text-align: left; }
+    </style>
+</head>
+<body>
+    <div class="login-box">
+        <h2>DST 聊天室</h2>
+        {% if error %}
+        <div class="error">{{ error }}</div>
+        {% endif %}
+        <form method="post">
+            <input type="text" name="username" placeholder="请输入你的游戏内名字..." required>
+            <input type="password" name="password" placeholder="请输入密码..." required>
+            <button type="submit">进入</button>
+        </form>
+        <div class="tips">
+            提示: <br>
+            - 玩家请输入自己完整的中文名或英文名
+        </div>
+    </div>
+</body>
+</html>
